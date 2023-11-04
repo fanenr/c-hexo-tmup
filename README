@@ -1,1 +1,12 @@
 A simple tool which can auto-update `updated` filed of front-matter in the hexo posts.
+
+Prerequisites:
+    Linux 2.6.13
+    gcc and glibc
+    make
+
+Compile:
+    just run: make
+
+Usage:
+    just run: ./<main-or-other-name> /path/to/source
