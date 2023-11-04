@@ -1,4 +1,5 @@
 #include "main.h"
+#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -51,9 +52,7 @@ static void add_watch(const char *dpath)
 
     for (item = readdir(dir); item; item = readdir(dir))
         if (item->d_type == DT_DIR) {
-
-            if (!strncmp(item->d_name, ".", NAME_SIZE)) {
-                /* watch self */
+            if (!strncmp(item->d_name, ".", NAME_SIZE)) { /* watch self */
                 int wd = inotify_add_watch(fd, dpath, MASK);
                 assert(wd > 0 && "watch subdir failed");
                 printf("watching: %s\n", dpath);
@@ -67,8 +66,8 @@ static void add_watch(const char *dpath)
                 continue;
             }
 
-            if (!strncmp(item->d_name, "..", NAME_SIZE))
-                continue; /* skip parent dir */
+            if (!strncmp(item->d_name, "..", NAME_SIZE)) /* skip parent dir */
+                continue;
 
             /* build full child dir path */
             size_t len2 = strnlen(item->d_name, NAME_SIZE);
@@ -91,8 +90,8 @@ static void get_time(char *dest, size_t size)
     time_t raw;
     time(&raw);
 
-    struct tm *time_info = localtime(&raw);
-    size_t ret = strftime(dest, 48, "%Y-%m-%d %H:%M:%S", time_info);
+    struct tm *tm = localtime(&raw);
+    size_t ret = strftime(dest, 48, "%Y-%m-%d %H:%M:%S", tm);
     assert(ret > 0 && "strftime called failed");
 }
 
@@ -104,12 +103,6 @@ static void work(struct inotify_event *event)
     /* do not use event->len directly */
     size_t len2 = strnlen(event->name, event->len);
     assert(len + len2 < NAME_SIZE - 2 && "filename is too long");
-
-    /* check if the file has been modified */
-    /* if (!(event->mask & IN_MODIFY)) {
-        printf("    has not been modified\n");
-        return;
-    } */
 
     /* check if it is an md file */
     if (strncmp(event->name + len2 - 3, ".md", 3)) {
@@ -127,47 +120,38 @@ static void work(struct inotify_event *event)
     FILE *fs = fopen(fpath, "r+");
     assert(fs != NULL && "open target file failed");
 
-    int front_matter = 0;
-    int newline = 1;
-    int flag = 0;
+    size_t llen;
+    char lbuf[LINE_SIZE];
+    int flag = 0, nline = 1;
 
     for (;;) {
-        int ch = fgetc(fs);
-
-        switch (ch) {
-        case '-': {
-            if (newline && getc(fs) == '-' && fgetc(fs) == '-')
-                front_matter++;
-            if (front_matter > 1)
-                goto end;
-            break;
-        }
-        case 'u': {
-            if (!newline || front_matter != 1) /* must in the front of a line */
-                break;
-            char temp[8];
-            fgets(temp, 7, fs);
-            if (!strncmp(temp, "pdated:", 6)) /* find  `updated:` */
-                goto up;
-            break;
-        }
-        case '\n':
-            newline = 1;
-            break;
-        case EOF:
+        if (fgets(lbuf, LINE_SIZE, fs) == NULL) {
+            /* can not find `updated` field */
+            printf("    update failed");
             goto end;
-        default:
-            newline = 0;
         }
+
+        llen = strnlen(lbuf, LINE_SIZE);       /* save lbuf size */
+
+        if (nline && !strncmp(lbuf, "---", 3)) /* find front-matter */
+            flag++;
+        if (flag > 1) /* reach the end of the front-matter */
+            goto end;
+        if (nline && !strncmp(lbuf, "updated", 7)) /* a potential problem */
+            break;
+
+        nline = lbuf[llen - 1] == '\n';
     }
 
-up : {
+    char tbuf[32];
+
     printf("    try to update\n");
-    char time_buf[32] = ": ";
-    get_time(time_buf + 2, 30);
-    assert(fputs(time_buf, fs) != EOF && "write target file failed");
+    fseek(fs, -strnlen(lbuf, LINE_SIZE) + 9, SEEK_CUR);
+    get_time(tbuf, 32);
+    printf("    new time: %s\n", tbuf);
+
+    assert(fputs(tbuf, fs) != EOF && "write target file failed");
     printf("    update successfully!\n");
-}
 
 end:
     fclose(fs);
