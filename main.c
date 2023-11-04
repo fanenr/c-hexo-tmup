@@ -1,7 +1,4 @@
 #include "main.h"
-#include <stddef.h>
-#include <stdio.h>
-#include <string.h>
 
 int fd;
 char *fds[WATCH_SIZE];
@@ -146,7 +143,7 @@ static void work(struct inotify_event *event)
     char tbuf[32];
 
     printf("    try to update\n");
-    fseek(fs, -strnlen(lbuf, LINE_SIZE) + 9, SEEK_CUR);
+    fseek(fs, -llen + 9, SEEK_CUR);
     get_time(tbuf, 32);
     printf("    new time: %s\n", tbuf);
 
