@@ -1,5 +1,6 @@
 #include "main.h"
 #include <stdio.h>
+#include <string.h>
 
 int fd;
 char *fds[WATCH_SIZE];
@@ -16,7 +17,7 @@ int main(int argc, char **argv)
     assert(fd >= 0 && "inotify init failed");
 
     ssize_t nread;
-    static char buf[BUFF_SIZE];
+    char buf[BUFF_SIZE];
     struct inotify_event *event;
 
     /* watch dirs recursively */
@@ -24,12 +25,10 @@ int main(int argc, char **argv)
 
     for (;;) {
         nread = read(fd, buf, BUFF_SIZE);
-
         assert(nread > 0 && "read from inotify instance failed");
 
         for (char *ptr = buf; ptr < buf + nread;) {
             event = (struct inotify_event *)ptr;
-            printf("event: %s/%s", fds[event->wd], event->name);
             inotify_add_watch(fd, fds[event->wd], IN_ONLYDIR);
             work(event);
             inotify_add_watch(fd, fds[event->wd], MASK);
@@ -99,13 +98,24 @@ static void get_time(char *dest, size_t size)
 
 static void work(struct inotify_event *event)
 {
+    printf("\nfile event: %s/%s\n", fds[event->wd], event->name);
+
     size_t len = strnlen(fds[event->wd], NAME_SIZE);
-    size_t len2 = event->len - 1; /* include NULL */
+    /* do not use event->len directly */
+    size_t len2 = strnlen(event->name, event->len);
     assert(len + len2 < NAME_SIZE - 2 && "filename is too long");
 
-    /* check if it is an md file */
-    if (strncmp(event->name + len2 - 3, ".md", 3))
+    /* check if the file has been modified */
+    /* if (!(event->mask & IN_MODIFY)) {
+        printf("    has not been modified\n");
         return;
+    } */
+
+    /* check if it is an md file */
+    if (strncmp(event->name + len2 - 3, ".md", 3)) {
+        printf("    not markdown file: %s\n", event->name);
+        return;
+    }
 
     /* need `/` and `NULL` */
     char fpath[NAME_SIZE];
@@ -152,11 +162,11 @@ static void work(struct inotify_event *event)
     }
 
 up : {
-    printf("Try to update file: %s\n", fpath);
+    printf("    try to update\n");
     char time_buf[32] = ": ";
     get_time(time_buf + 2, 30);
     assert(fputs(time_buf, fs) != EOF && "write target file failed");
-    printf("Update Successfully!\n");
+    printf("    update successfully!\n");
 }
 
 end:
