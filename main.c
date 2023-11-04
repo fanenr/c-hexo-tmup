@@ -1,8 +1,7 @@
 #include "main.h"
-#include <stdio.h>
 
-int fd;
-char *fds[WATCH_SIZE];
+int ifd;
+char *wdns[WATCH_SIZE];
 
 int main(int argc, char **argv)
 {
@@ -12,8 +11,8 @@ int main(int argc, char **argv)
     path[plen - 1] == '/' ? path[plen - 1] = 0 : 0;
 
     setlocale(LC_ALL, "en_US.UTF-8");
-    fd = inotify_init();
-    CHECK(fd >= 0, "inotify init failed");
+    ifd = inotify_init();
+    CHECK(ifd >= 0, "inotify init failed");
 
     ssize_t nread;
     char buf[BUFF_SIZE];
@@ -23,20 +22,20 @@ int main(int argc, char **argv)
     add_watch(path);
 
     for (;;) {
-        nread = read(fd, buf, BUFF_SIZE);
+        nread = read(ifd, buf, BUFF_SIZE);
         CHECK(nread > 0, "read from inotify instance failed");
 
         for (char *ptr = buf; ptr < buf + nread;) {
             event = (struct inotify_event *)ptr;
-            inotify_add_watch(fd, fds[event->wd], IN_ONLYDIR);
+            inotify_add_watch(ifd, wdns[event->wd], IN_ONLYDIR);
             work(event);
-            inotify_add_watch(fd, fds[event->wd], MASK);
+            inotify_add_watch(ifd, wdns[event->wd], MASK);
             ptr += sizeof(struct inotify_event) + event->len;
         }
     }
 
     for (int i = 0; i < WATCH_SIZE; i++)
-        free(fds[i]);
+        free(wdns[i]);
 }
 
 static void add_watch(const char *dpath)
@@ -51,14 +50,14 @@ static void add_watch(const char *dpath)
     for (item = readdir(dir); item; item = readdir(dir))
         if (item->d_type == DT_DIR) {
             if (!strncmp(item->d_name, ".", NAME_SIZE)) { /* watch self */
-                int wd = inotify_add_watch(fd, dpath, MASK);
+                int wd = inotify_add_watch(ifd, dpath, MASK);
                 CHECK(wd > 0, "watch subdir failed");
                 printf("watching: %s\n", dpath);
 
                 /* save full path */
                 char *str = (char *)malloc(len + 1);
                 strncpy(str, dpath, len);
-                fds[wd] = str;
+                wdns[wd] = str;
                 str[len] = 0;
 
                 continue;
@@ -95,9 +94,9 @@ static void get_time(char *dest, size_t size)
 
 static void work(struct inotify_event *event)
 {
-    printf("\nfile event: %s/%s\n", fds[event->wd], event->name);
+    printf("\nfile event: %s/%s\n", wdns[event->wd], event->name);
 
-    size_t len = strnlen(fds[event->wd], NAME_SIZE);
+    size_t len = strnlen(wdns[event->wd], NAME_SIZE);
     /* do not use event->len directly */
     size_t len2 = strnlen(event->name, event->len);
     CHECK(len + len2 < NAME_SIZE - 2, "filename is too long");
@@ -112,7 +111,7 @@ static void work(struct inotify_event *event)
     char fpath[NAME_SIZE];
     fpath[len] = '/';
     fpath[len + len2 + 1] = 0;
-    strncpy(fpath, fds[event->wd], len);
+    strncpy(fpath, wdns[event->wd], len);
     strncpy(fpath + len + 1, event->name, len2);
 
     FILE *fs = fopen(fpath, "r+");
