@@ -1,18 +1,19 @@
 #include "main.h"
+#include <stdio.h>
 
 int fd;
 char *fds[WATCH_SIZE];
 
 int main(int argc, char **argv)
 {
-    assert(argc == 2 && "must give a pathname");
+    CHECK(argc == 2, "must give a path");
     char *path = argv[1];
     size_t plen = strnlen(path, NAME_SIZE);
     path[plen - 1] == '/' ? path[plen - 1] = 0 : 0;
 
     setlocale(LC_ALL, "en_US.UTF-8");
     fd = inotify_init();
-    assert(fd >= 0 && "inotify init failed");
+    CHECK(fd >= 0, "inotify init failed");
 
     ssize_t nread;
     char buf[BUFF_SIZE];
@@ -23,7 +24,7 @@ int main(int argc, char **argv)
 
     for (;;) {
         nread = read(fd, buf, BUFF_SIZE);
-        assert(nread > 0 && "read from inotify instance failed");
+        CHECK(nread > 0, "read from inotify instance failed");
 
         for (char *ptr = buf; ptr < buf + nread;) {
             event = (struct inotify_event *)ptr;
@@ -41,7 +42,7 @@ int main(int argc, char **argv)
 static void add_watch(const char *dpath)
 {
     DIR *dir = opendir(dpath);
-    assert(dir != NULL && "open dir failed");
+    CHECK(dir != NULL, "open dir failed");
 
     struct dirent *item;
     char npath[NAME_SIZE];
@@ -51,7 +52,7 @@ static void add_watch(const char *dpath)
         if (item->d_type == DT_DIR) {
             if (!strncmp(item->d_name, ".", NAME_SIZE)) { /* watch self */
                 int wd = inotify_add_watch(fd, dpath, MASK);
-                assert(wd > 0 && "watch subdir failed");
+                CHECK(wd > 0, "watch subdir failed");
                 printf("watching: %s\n", dpath);
 
                 /* save full path */
@@ -68,7 +69,7 @@ static void add_watch(const char *dpath)
 
             /* build full child dir path */
             size_t len2 = strnlen(item->d_name, NAME_SIZE);
-            assert(len + len2 < NAME_SIZE - 2 && "dirname is too long");
+            CHECK(len + len2 < NAME_SIZE - 2, "dirname is too long");
 
             /* need `/` and `NULL` */
             npath[len] = '/';
@@ -89,7 +90,7 @@ static void get_time(char *dest, size_t size)
 
     struct tm *tm = localtime(&raw);
     size_t ret = strftime(dest, 48, "%Y-%m-%d %H:%M:%S", tm);
-    assert(ret > 0 && "strftime called failed");
+    CHECK(ret > 0, "strftime called failed");
 }
 
 static void work(struct inotify_event *event)
@@ -99,9 +100,9 @@ static void work(struct inotify_event *event)
     size_t len = strnlen(fds[event->wd], NAME_SIZE);
     /* do not use event->len directly */
     size_t len2 = strnlen(event->name, event->len);
-    assert(len + len2 < NAME_SIZE - 2 && "filename is too long");
+    CHECK(len + len2 < NAME_SIZE - 2, "filename is too long");
 
-    /* check if it is an md file */
+    /* CHECK if it is an md file */
     if (strncmp(event->name + len2 - 3, ".md", 3)) {
         printf("    not markdown file: %s\n", event->name);
         return;
@@ -115,7 +116,7 @@ static void work(struct inotify_event *event)
     strncpy(fpath + len + 1, event->name, len2);
 
     FILE *fs = fopen(fpath, "r+");
-    assert(fs != NULL && "open target file failed");
+    CHECK(fs != NULL, "open target file failed");
 
     size_t llen;
     char lbuf[LINE_SIZE];
@@ -140,14 +141,14 @@ static void work(struct inotify_event *event)
         nline = lbuf[llen - 1] == '\n';
     }
 
+    /* update time */
     char tbuf[32];
-
+    get_time(tbuf, 32);
     printf("    try to update\n");
     fseek(fs, -llen + 9, SEEK_CUR);
-    get_time(tbuf, 32);
     printf("    new time: %s\n", tbuf);
 
-    assert(fputs(tbuf, fs) != EOF && "write target file failed");
+    CHECK(fputs(tbuf, fs) != EOF, "write target file failed");
     printf("    update successfully!\n");
 
 end:
