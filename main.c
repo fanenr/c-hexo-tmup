@@ -122,9 +122,8 @@ static void work(struct inotify_event *event)
     int flag = 0, nline = 1;
 
     for (;;) {
-        if (fgets(lbuf, LINE_SIZE, fs) == NULL) {
-            /* can not find `updated` field */
-            printf("    update failed");
+        if (fgets(lbuf, LINE_SIZE, fs) == NULL) { /* reach the end of the file*/
+            printf("    there is no front-matter\n");
             goto end;
         }
 
@@ -132,21 +131,36 @@ static void work(struct inotify_event *event)
 
         if (nline && !strncmp(lbuf, "---", 3)) /* find front-matter */
             flag++;
-        if (flag > 1) /* reach the end of the front-matter */
+        if (flag > 1) { /* can not find `updated` field */
+            printf("    there is no updated field\n");
             goto end;
+        }
         if (nline && !strncmp(lbuf, "updated", 7)) /* a potential problem */
             break;
 
         nline = lbuf[llen - 1] == '\n';
     }
 
-    /* update time */
+    /* try to update time */
     char tbuf[32];
     get_time(tbuf, 32);
     printf("    try to update\n");
     fseek(fs, -llen + 9, SEEK_CUR);
-    printf("    new time: %s\n", tbuf);
 
+    /* check if there is enough sapce */
+    size_t space = 0;
+    for (int i = 9; i < llen; i++) {
+        if (lbuf[i] == '\n' || lbuf[i] == 0)
+            break;
+        space++;
+    }
+    if (space < 19) {
+        printf("    there is no enough sapce to overwrite\n");
+        goto end;
+    }
+
+    /* try to overwrite time */
+    printf("    new time: %s\n", tbuf);
     CHECK(fputs(tbuf, fs) != EOF, "write target file failed");
     printf("    update successfully!\n");
 
