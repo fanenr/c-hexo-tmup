@@ -10,8 +10,8 @@ int main(int argc, char **argv)
     size_t plen = strnlen(path, NAME_SIZE);
     path[plen - 1] == '/' ? path[plen - 1] = 0 : 0;
 
-    setlocale(LC_ALL, "en_US.UTF-8");
     ifd = inotify_init();
+    setlocale(LC_ALL, "en_US.UTF-8");
     CHECK(ifd >= 0, "inotify init failed");
 
     ssize_t nread;
@@ -88,7 +88,7 @@ static void get_time(char *dest, size_t size)
     time(&raw);
 
     struct tm *tm = localtime(&raw);
-    size_t ret = strftime(dest, 48, "%Y-%m-%d %H:%M:%S", tm);
+    size_t ret = strftime(dest, size, "%Y-%m-%d %H:%M:%S", tm);
     CHECK(ret > 0, "strftime called failed");
 }
 
@@ -119,8 +119,8 @@ static void work(struct inotify_event *event)
 
     size_t llen;
     char lbuf[LINE_SIZE];
-    int flag = 0, nline = 1;
-
+    int front = 0, nline = 1;
+    
     for (;;) {
         if (fgets(lbuf, LINE_SIZE, fs) == NULL) { /* reach the end of the file*/
             printf("    there is no front-matter\n");
@@ -130,8 +130,8 @@ static void work(struct inotify_event *event)
         llen = strnlen(lbuf, LINE_SIZE);       /* save lbuf size */
 
         if (nline && !strncmp(lbuf, "---", 3)) /* find front-matter */
-            flag++;
-        if (flag > 1) { /* can not find `updated` field */
+            front++;
+        if (front > 1) { /* can not find `updated` field */
             printf("    there is no updated field\n");
             goto end;
         }
@@ -142,8 +142,8 @@ static void work(struct inotify_event *event)
     }
 
     /* try to update time */
-    char tbuf[32];
-    get_time(tbuf, 32);
+    char tbuf[24];
+    get_time(tbuf, 24);
     printf("    try to update\n");
     fseek(fs, -llen + 9, SEEK_CUR);
 

@@ -3,13 +3,13 @@ DBG := -ggdb
 APP := tmup
 
 .PHONY: all
-all: main
+all: $(APP)
 
-main: main.o
-	$(CC) $(DBG) -o $(APP) $^
+$(APP): main.o
+	$(CC) -o $(APP) $^
 
 main.o:	main.c main.h
-	$(CC) -c $(DBG) -o $@ $<
+	$(CC) -c $(DBG) $<
 
 .PHONY: clean
 clean:
