@@ -101,7 +101,7 @@ static void work(struct inotify_event *event)
     size_t len2 = strnlen(event->name, event->len);
     CHECK(len + len2 < NAME_SIZE - 2, "filename is too long");
 
-    /* CHECK if it is an md file */
+    /* check if it is an md file */
     if (strncmp(event->name + len2 - 3, ".md", 3)) {
         printf("    not markdown file: %s\n", event->name);
         return;
