@@ -1,16 +1,15 @@
-CC  := gcc
-DBG := -ggdb
-APP := tmup
+LDFLAGS   = -g
+CFLAGS    = -Wall -Wextra -Werror -ggdb -std=gnu11
 
 .PHONY: all
-all: $(APP)
+all: tmup
 
-$(APP): main.o
-	$(CC) -o $(APP) $^
+tmup: main.o
+	gcc -o $@ $^ $(LDFLAGS)
 
 main.o:	main.c main.h
-	$(CC) -c $(DBG) $<
+	gcc -c $< $(CFLAGS)
 
 .PHONY: clean
 clean:
-	-rm -f $(APP) main.o
+	-rm -f *.o tmup

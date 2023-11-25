@@ -1,4 +1,17 @@
 #include "main.h"
+#include <stddef.h>
+#include <time.h>
+#include <stdio.h>
+#include <locale.h>
+#include <string.h>
+#include <stdlib.h>
+#include <dirent.h>
+#include <unistd.h>
+#include <sys/inotify.h>
+
+static void add_watch(const char *dpath);
+static void get_time(char *dest, size_t size);
+static void work(struct inotify_event *event);
 
 int ifd;
 char *wdns[WATCH_SIZE];
@@ -120,7 +133,7 @@ static void work(struct inotify_event *event)
     size_t llen;
     char lbuf[LINE_SIZE];
     int front = 0, nline = 1;
-    
+
     for (;;) {
         if (fgets(lbuf, LINE_SIZE, fs) == NULL) { /* reach the end of the file*/
             printf("    there is no front-matter\n");
@@ -149,7 +162,7 @@ static void work(struct inotify_event *event)
 
     /* check if there is enough sapce */
     size_t space = 0;
-    for (int i = 9; i < llen; i++) {
+    for (unsigned i = 9; i < llen; i++) {
         if (lbuf[i] == '\n' || lbuf[i] == 0)
             break;
         space++;
