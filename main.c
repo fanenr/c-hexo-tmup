@@ -1,5 +1,4 @@
 #include "main.h"
-#include <stddef.h>
 #include <time.h>
 #include <stdio.h>
 #include <locale.h>
@@ -16,7 +15,8 @@ static void work(struct inotify_event *event);
 int ifd;
 char *wdns[WATCH_SIZE];
 
-int main(int argc, char **argv)
+int
+main(int argc, char **argv)
 {
     CHECK(argc == 2, "must give a path");
     char *path = argv[1];
@@ -51,7 +51,8 @@ int main(int argc, char **argv)
         free(wdns[i]);
 }
 
-static void add_watch(const char *dpath)
+static void
+add_watch(const char *dpath)
 {
     DIR *dir = opendir(dpath);
     CHECK(dir != NULL, "open dir failed");
@@ -95,7 +96,8 @@ static void add_watch(const char *dpath)
     closedir(dir);
 }
 
-static void get_time(char *dest, size_t size)
+static void
+get_time(char *dest, size_t size)
 {
     time_t raw;
     time(&raw);
@@ -105,7 +107,8 @@ static void get_time(char *dest, size_t size)
     CHECK(ret > 0, "strftime called failed");
 }
 
-static void work(struct inotify_event *event)
+static void
+work(struct inotify_event *event)
 {
     printf("\nfile event: %s/%s\n", wdns[event->wd], event->name);
 

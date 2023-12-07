@@ -1,9 +1,9 @@
 #ifndef MAIN_H
 #define MAIN_H
 
-#define NAME_SIZE 256
-#define LINE_SIZE 1024
-#define BUFF_SIZE 4096
+#define NAME_SIZE  256
+#define LINE_SIZE  1024
+#define BUFF_SIZE  4096
 #define WATCH_SIZE 4096
 
 #define MASK IN_CLOSE_WRITE
