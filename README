@@ -1,4 +1,4 @@
-A simple tool which can auto-update `updated` field of front-matter in the hexo posts.
+A simple tool which can automatically update the `updated` field of front-matter in the hexo posts.
 
 Prerequisites:
     Linux 2.6.13 or above
