@@ -1,185 +1,209 @@
 #include "main.h"
-#include <time.h>
-#include <stdio.h>
-#include <locale.h>
-#include <string.h>
-#include <stdlib.h>
 #include <dirent.h>
-#include <unistd.h>
+#include <locale.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/inotify.h>
+#include <time.h>
+#include <unistd.h>
 
-static void add_watch(const char *dpath);
-static void get_time(char *dest, size_t size);
-static void work(struct inotify_event *event);
+static void add_watch (const char *dpath);
+static void get_time (char *dest, size_t size);
+static void work (struct inotify_event *event);
 
-int ifd;
-char *wdns[WATCH_SIZE];
+int inotify;
+char *entries[WATCH_SIZE];
 
 int
-main(int argc, char **argv)
+main (int argc, char **argv)
 {
-    CHECK(argc == 2, "must give a path");
-    char *path = argv[1];
-    size_t plen = strnlen(path, NAME_SIZE);
-    path[plen - 1] == '/' ? path[plen - 1] = 0 : 0;
+  setlocale (LC_ALL, "en_US.UTF-8");
+  CHECK (argc == 2, "must specify a listening path");
 
-    ifd = inotify_init();
-    setlocale(LC_ALL, "en_US.UTF-8");
-    CHECK(ifd >= 0, "inotify init failed");
+  char *path = argv[1];
+  size_t plen = strlen (path);
+  (path[plen - 1] == '/') ? path[plen - 1] = '\0' : 0;
 
-    ssize_t nread;
-    char buf[BUFF_SIZE];
-    struct inotify_event *event;
+  inotify = inotify_init ();
+  CHECK (inotify >= 0, "inotify init failed");
 
-    /* watch dirs recursively */
-    add_watch(path);
+  ssize_t nread;
+  char buff[BUFF_SIZE];
+  struct inotify_event *event;
 
-    for (;;) {
-        nread = read(ifd, buf, BUFF_SIZE);
-        CHECK(nread > 0, "read from inotify instance failed");
+  /* watch dirs recursively */
+  add_watch (path);
 
-        for (char *ptr = buf; ptr < buf + nread;) {
-            event = (struct inotify_event *)ptr;
-            inotify_add_watch(ifd, wdns[event->wd], IN_ONLYDIR);
-            work(event);
-            inotify_add_watch(ifd, wdns[event->wd], MASK);
-            ptr += sizeof(struct inotify_event) + event->len;
+  for (;;)
+    {
+      nread = read (inotify, buff, BUFF_SIZE);
+      CHECK (nread > 0, "read from inotify instance failed");
+
+      for (char *ptr = buff; ptr < buff + nread;)
+        {
+          event = (struct inotify_event *)ptr;
+          /* inotify_rm_watch (inotify, event->wd); */
+          inotify_add_watch (inotify, entries[event->wd], IN_ONLYDIR);
+          work (event);
+          inotify_add_watch (inotify, entries[event->wd], MASK);
+          ptr += sizeof (struct inotify_event) + event->len;
         }
     }
 
-    for (int i = 0; i < WATCH_SIZE; i++)
-        free(wdns[i]);
+  for (int i = 0; i < WATCH_SIZE; i++)
+    free (entries[i]);
 }
 
 static void
-add_watch(const char *dpath)
+add_watch (const char *dpath)
 {
-    DIR *dir = opendir(dpath);
-    CHECK(dir != NULL, "open dir failed");
+  DIR *dir = opendir (dpath);
+  CHECK (dir != NULL, "open dir failed");
 
-    struct dirent *item;
-    char npath[NAME_SIZE];
-    size_t len = strnlen(dpath, NAME_SIZE);
+  struct dirent *item;
+  char subdir[NAME_SIZE];
+  size_t len = strlen (dpath);
 
-    for (item = readdir(dir); item; item = readdir(dir))
-        if (item->d_type == DT_DIR) {
-            if (!strncmp(item->d_name, ".", NAME_SIZE)) { /* watch self */
-                int wd = inotify_add_watch(ifd, dpath, MASK);
-                CHECK(wd > 0, "watch subdir failed");
-                printf("watching: %s\n", dpath);
+  for (item = readdir (dir); item; item = readdir (dir))
+    if (item->d_type == DT_DIR)
+      {
+        if (strcmp (item->d_name, ".") == 0)
+          {
+            /* watch self */
+            int wd = inotify_add_watch (inotify, dpath, MASK);
+            CHECK (wd > 0, "watch subdir failed");
+            printf ("watching: %s\n", dpath);
 
-                /* save full path */
-                char *str = (char *)malloc(len + 1);
-                strncpy(str, dpath, len);
-                wdns[wd] = str;
-                str[len] = 0;
+            /* save full path */
+            char *str = (char *)malloc (len + 1);
+            CHECK (strcpy (str, dpath) == str, "copy path failed");
+            entries[wd] = str;
 
-                continue;
-            }
+            continue;
+          }
 
-            if (!strncmp(item->d_name, "..", NAME_SIZE)) /* skip parent dir */
-                continue;
+        if (strcmp (item->d_name, "..") == 0)
+          /* skip parent dir */
+          continue;
 
-            /* build full child dir path */
-            size_t len2 = strnlen(item->d_name, NAME_SIZE);
-            CHECK(len + len2 < NAME_SIZE - 2, "dirname is too long");
+        /* build the full path of subdir */
+        size_t item_len = strlen (item->d_name);
+        memcpy (subdir, dpath, len);
+        subdir[len] = '/';
+        memcpy (subdir + len + 1, item->d_name, item_len + 1);
 
-            /* need `/` and `NULL` */
-            npath[len] = '/';
-            npath[len + len2 + 1] = 0;
-            strncpy(npath, dpath, len);
-            strncpy(npath + len + 1, item->d_name, len2);
+        add_watch (subdir);
+      }
 
-            add_watch(npath);
-        }
-
-    closedir(dir);
+  closedir (dir);
 }
 
 static void
-get_time(char *dest, size_t size)
+get_time (char *dest, size_t size)
 {
-    time_t raw;
-    time(&raw);
+  time_t raw;
+  time (&raw);
 
-    struct tm *tm = localtime(&raw);
-    size_t ret = strftime(dest, size, "%Y-%m-%d %H:%M:%S", tm);
-    CHECK(ret > 0, "strftime called failed");
+  struct tm *tm = localtime (&raw);
+  size_t ret = strftime (dest, size, "%Y-%m-%d %H:%M:%S", tm);
+  CHECK (ret > 0, "strftime failed");
 }
 
 static void
-work(struct inotify_event *event)
+work (struct inotify_event *event)
 {
-    printf("\nfile event: %s/%s\n", wdns[event->wd], event->name);
+  /* ignore files whose name start with `.` */
+  if (event->name[0] == '.')
+    return;
 
-    size_t len = strnlen(wdns[event->wd], NAME_SIZE);
-    /* do not use event->len directly */
-    size_t len2 = strnlen(event->name, event->len);
-    CHECK(len + len2 < NAME_SIZE - 2, "filename is too long");
+  printf ("\nfile event: %s/%s\n", entries[event->wd], event->name);
 
-    /* check if it is an md file */
-    if (strncmp(event->name + len2 - 3, ".md", 3)) {
-        printf("    not markdown file: %s\n", event->name);
-        return;
+  size_t len = strlen (entries[event->wd]);
+  /* do not use event->len directly */
+  size_t len2 = strlen (event->name);
+
+  /* check whether it's a markdown file */
+  if (strcmp (event->name + len2 - 3, ".md") != 0)
+    {
+      printf ("    not markdown file: %s\n", event->name);
+      return;
     }
 
-    /* need `/` and `NULL` */
-    char fpath[NAME_SIZE];
-    fpath[len] = '/';
-    fpath[len + len2 + 1] = 0;
-    strncpy(fpath, wdns[event->wd], len);
-    strncpy(fpath + len + 1, event->name, len2);
+  char file_path[NAME_SIZE];
+  memcpy (file_path, entries[event->wd], len);
+  file_path[len] = '/';
+  memcpy (file_path + len + 1, event->name, len2 + 1);
 
-    FILE *fs = fopen(fpath, "r+");
-    CHECK(fs != NULL, "open target file failed");
+  /* write delay */
+  struct timespec ts;
+  ts.tv_sec = 0;
+  ts.tv_nsec = WRITE_DELAY;
+  nanosleep (&ts, NULL);
 
-    size_t llen;
-    char lbuf[LINE_SIZE];
-    int front = 0, nline = 1;
+  FILE *fs = fopen (file_path, "r+");
+  CHECK (fs != NULL, "open target file failed");
 
-    for (;;) {
-        if (fgets(lbuf, LINE_SIZE, fs) == NULL) { /* reach the end of the file*/
-            printf("    there is no front-matter\n");
-            goto end;
+  size_t line_len;
+  char line_buff[LINE_SIZE];
+  int front = 0, nline = 1;
+
+  for (;;)
+    {
+      if (fgets (line_buff, LINE_SIZE, fs) == NULL)
+        {
+          /* reach the end of the file*/
+          printf ("    there is no front-matter\n");
+          goto end;
         }
 
-        llen = strnlen(lbuf, LINE_SIZE);       /* save lbuf size */
+      /* save lbuf size */
+      line_len = strnlen (line_buff, LINE_SIZE);
 
-        if (nline && !strncmp(lbuf, "---", 3)) /* find front-matter */
-            front++;
-        if (front > 1) { /* can not find `updated` field */
-            printf("    there is no updated field\n");
-            goto end;
+      /* find front-matter */
+      if (nline && !strncmp (line_buff, "---", 3))
+        front++;
+
+      if (front > 1)
+        {
+          /* can not find `updated` field */
+          printf ("    there is no updated field\n");
+          return;
         }
-        if (nline && !strncmp(lbuf, "updated", 7)) /* a potential problem */
-            break;
 
-        nline = lbuf[llen - 1] == '\n';
+      /* there is a potential problem */
+      if (nline && !strncmp (line_buff, "updated", 7))
+        break;
+
+      nline = line_buff[line_len - 1] == '\n';
     }
 
-    /* try to update time */
-    char tbuf[24];
-    get_time(tbuf, 24);
-    printf("    try to update\n");
-    fseek(fs, -llen + 9, SEEK_CUR);
+  /* try to update time */
+  char time_buff[24];
+  get_time (time_buff, 24);
+  printf ("    try to update\n");
+  fseek (fs, -line_len + 9, SEEK_CUR);
 
-    /* check if there is enough sapce */
-    size_t space = 0;
-    for (unsigned i = 9; i < llen; i++) {
-        if (lbuf[i] == '\n' || lbuf[i] == 0)
-            break;
-        space++;
-    }
-    if (space < 19) {
-        printf("    there is no enough sapce to overwrite\n");
-        goto end;
+  /* check whether there is enough sapce */
+  size_t space = 0;
+  for (unsigned i = 9; i < line_len; i++)
+    {
+      if (line_buff[i] == '\n' || line_buff[i] == 0)
+        break;
+      space++;
     }
 
-    /* try to overwrite time */
-    printf("    new time: %s\n", tbuf);
-    CHECK(fputs(tbuf, fs) != EOF, "write target file failed");
-    printf("    update successfully!\n");
+  if (space < 19)
+    {
+      printf ("    there is no enough sapce to overwrite\n");
+      goto end;
+    }
+
+  /* try to overwrite time */
+  printf ("    new time: %s\n", time_buff);
+  CHECK (fputs (time_buff, fs) != EOF, "write target file failed");
+  printf ("    update successfully!\n");
 
 end:
-    fclose(fs);
+  fclose (fs);
 }
