@@ -7,7 +7,7 @@ all: tmup
 tmup: main.o
 	gcc -o $@ $^ $(LDFLAGS)
 
-main.o:	main.c main.h
+main.o:	main.c config.h
 	gcc -c $< $(CFLAGS)
 
 .PHONY: clean
