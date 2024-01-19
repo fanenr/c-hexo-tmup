@@ -1,4 +1,5 @@
-#include "main.h"
+#include "config.h"
+
 #include <dirent.h>
 #include <locale.h>
 #include <stdio.h>
@@ -8,12 +9,25 @@
 #include <time.h>
 #include <unistd.h>
 
+/* check */
+#define CHECK(expr, msg)                                                      \
+  if (!(expr))                                                                \
+    {                                                                         \
+      printf ("error occurred on line: %d\nexpr: %s\nmsg : %s\n", __LINE__,   \
+              #expr, msg);                                                    \
+      exit (1);                                                               \
+    }
+
+/* checked memcpy */
+#define MEMCPY(dest, src, len, msg)                                           \
+  CHECK (memcpy (dest, src, len) == dest, msg)
+
 static void add_watch (const char *dpath);
 static void get_time (char *dest, size_t size);
 static void work (struct inotify_event *event);
 
-int inotify;
-char *entries[WATCH_SIZE];
+static int inotify;
+static char *entries[WATCH_SIZE];
 
 int
 main (int argc, char **argv)
@@ -51,6 +65,7 @@ main (int argc, char **argv)
         }
     }
 
+  /* actually don't need to free */
   for (int i = 0; i < WATCH_SIZE; i++)
     free (entries[i]);
 }
@@ -77,7 +92,7 @@ add_watch (const char *dpath)
 
             /* save full path */
             char *str = (char *)malloc (len + 1);
-            CHECK (strcpy (str, dpath) == str, "copy path failed");
+            MEMCPY (str, dpath, len + 1, "save the watching path failed");
             entries[wd] = str;
 
             continue;
@@ -89,9 +104,10 @@ add_watch (const char *dpath)
 
         /* build the full path of subdir */
         size_t item_len = strlen (item->d_name);
-        memcpy (subdir, dpath, len);
+        MEMCPY (subdir, dpath, len, "build the path of subdir failed");
         subdir[len] = '/';
-        memcpy (subdir + len + 1, item->d_name, item_len + 1);
+        MEMCPY (subdir + len + 1, item->d_name, item_len + 1,
+                "build the path of subdir failed");
 
         add_watch (subdir);
       }
@@ -131,9 +147,11 @@ work (struct inotify_event *event)
     }
 
   char file_path[NAME_SIZE];
-  memcpy (file_path, entries[event->wd], len);
+  MEMCPY (file_path, entries[event->wd], len,
+          "build the full path of markdown file failed");
   file_path[len] = '/';
-  memcpy (file_path + len + 1, event->name, len2 + 1);
+  MEMCPY (file_path + len + 1, event->name, len2 + 1,
+          "build the full path of markdown file failed");
 
   /* write delay */
   struct timespec ts;
@@ -168,7 +186,7 @@ work (struct inotify_event *event)
         {
           /* can not find `updated` field */
           printf ("    there is no updated field\n");
-          return;
+          goto end;
         }
 
       /* there is a potential problem */
@@ -182,7 +200,7 @@ work (struct inotify_event *event)
   char time_buff[24];
   get_time (time_buff, 24);
   printf ("    try to update\n");
-  fseek (fs, -line_len + 9, SEEK_CUR);
+  fseek (fs, 9 - line_len, SEEK_CUR);
 
   /* check whether there is enough sapce */
   size_t space = 0;
@@ -195,13 +213,13 @@ work (struct inotify_event *event)
 
   if (space < 19)
     {
-      printf ("    there is no enough sapce to overwrite\n");
+      printf ("    there is not enough sapce to overwrite\n");
       goto end;
     }
 
   /* try to overwrite time */
   printf ("    new time: %s\n", time_buff);
-  CHECK (fputs (time_buff, fs) != EOF, "write target file failed");
+  CHECK (fputs (time_buff, fs) != EOF, "write the target file failed");
   printf ("    update successfully!\n");
 
 end:
