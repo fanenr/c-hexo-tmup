@@ -1,5 +1,5 @@
 LDFLAGS   = -g
-CFLAGS    = -Wall -Wextra -Werror -ggdb -std=gnu11
+CFLAGS    = -Wall -Wextra -Werror -ggdb3 -std=gnu11
 
 .PHONY: all
 all: tmup
