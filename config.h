@@ -1,5 +1,5 @@
-#ifndef MAIN_H
-#define MAIN_H
+#ifndef CONFIG_H
+#define CONFIG_H
 
 /* buffer length */
 #define NAME_SIZE 256
@@ -9,8 +9,5 @@
 
 /* delay nanosecs */
 #define WRITE_DELAY 500000
-
-/* inotify mask */
-#define MASK IN_CLOSE_WRITE
 
 #endif
