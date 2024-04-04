@@ -1,33 +1,40 @@
 #include "config.h"
 
-#include <dirent.h>
 #include <locale.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include <dirent.h>
 #include <sys/inotify.h>
 #include <time.h>
 #include <unistd.h>
 
+/* inotify mask */
+#define WATCH_FLAG IN_CLOSE_WRITE
+
 /* check */
 #define CHECK(expr, msg)                                                      \
-  if (!(expr))                                                                \
-    {                                                                         \
-      printf ("error occurred on line: %d\nexpr: %s\nmsg : %s\n", __LINE__,   \
-              #expr, msg);                                                    \
-      exit (1);                                                               \
-    }
+  do                                                                          \
+    if (!(expr))                                                              \
+      {                                                                       \
+        fprintf (stderr,                                                      \
+                 "error occurred at %s:%d (%s)\nexpr: %s\nmsg : %s\n",        \
+                 __FILE__, __LINE__, __FUNCTION__, #expr, msg);               \
+        __builtin_trap ();                                                    \
+      }                                                                       \
+  while (0)
 
 /* checked memcpy */
 #define MEMCPY(dest, src, len, msg)                                           \
   CHECK (memcpy (dest, src, len) == dest, msg)
 
+static int inotify;
+static char *entries[WATCH_SIZE];
+
 static void add_watch (const char *dpath);
 static void get_time (char *dest, size_t size);
 static void work (struct inotify_event *event);
-
-static int inotify;
-static char *entries[WATCH_SIZE];
 
 int
 main (int argc, char **argv)
@@ -60,12 +67,12 @@ main (int argc, char **argv)
           /* inotify_rm_watch (inotify, event->wd); */
           inotify_add_watch (inotify, entries[event->wd], IN_ONLYDIR);
           work (event);
-          inotify_add_watch (inotify, entries[event->wd], MASK);
+          inotify_add_watch (inotify, entries[event->wd], WATCH_FLAG);
           ptr += sizeof (struct inotify_event) + event->len;
         }
     }
 
-  /* actually don't need to free */
+  /* there is actually no need to free */
   for (int i = 0; i < WATCH_SIZE; i++)
     free (entries[i]);
 }
@@ -86,7 +93,7 @@ add_watch (const char *dpath)
         if (strcmp (item->d_name, ".") == 0)
           {
             /* watch self */
-            int wd = inotify_add_watch (inotify, dpath, MASK);
+            int wd = inotify_add_watch (inotify, dpath, WATCH_FLAG);
             CHECK (wd > 0, "watch subdir failed");
             printf ("watching: %s\n", dpath);
 
