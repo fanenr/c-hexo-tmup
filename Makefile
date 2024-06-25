@@ -1,5 +1,6 @@
-LDFLAGS   = -g
-CFLAGS    = -Wall -Wextra -Werror -ggdb3 -std=gnu11
+MODE = debug
+
+include config.mk
 
 .PHONY: all
 all: tmup
