@@ -1,3 +1,4 @@
+CC   = gcc
 MODE = debug
 
 include config.mk
@@ -5,11 +6,11 @@ include config.mk
 .PHONY: all
 all: tmup
 
-tmup: main.o
-	gcc -o $@ $^ $(LDFLAGS)
+tmup: main.o mstr.o
+	$(CC) -o $@ $^ $(LDFLAGS)
 
-main.o:	main.c config.h
-	gcc -c $< $(CFLAGS)
+mstr.o: mstr.c mstr.h
+main.o:	main.c util.h mstr.h config.h
 
 .PHONY: clean
 clean:
