@@ -3,19 +3,16 @@
 #include "util.h"
 
 #include <locale.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <time.h>
 
 #include <dirent.h>
 #include <sys/inotify.h>
-#include <time.h>
 #include <unistd.h>
 
 #define WATCH_FLAG IN_CLOSE_WRITE
 
 static int inotify;
-static mstr_t entries[] = { [0 ... WATCH_SIZE - 1] = MSTR_INIT };
+static mstr_t entries[WATCH_SIZE];
 
 static void add_watch (const char *dpath);
 static void work (struct inotify_event *event);
@@ -41,7 +38,7 @@ main (int argc, char **argv)
 
   for (struct inotify_event *event;;)
     {
-      size_t n = read (inotify, buff, BUFF_SIZE);
+      size_t n = read (inotify, buff, sizeof (buff));
       error_if (n <= 0, "read from inotify");
 
       for (char *ptr = buff; ptr < buff + n;
@@ -54,9 +51,6 @@ main (int argc, char **argv)
           inotify_add_watch (inotify, path, WATCH_FLAG);
         }
     }
-
-  for (int i = 0; i < WATCH_SIZE; i++)
-    mstr_free (entries + i);
 }
 
 static void
@@ -110,22 +104,6 @@ get_time (char *dest, size_t size)
   return strftime (dest, size, "%Y-%m-%d %H:%M:%S", tm);
 }
 
-#define printf_return(fmt, ...)                                               \
-  do                                                                          \
-    {                                                                         \
-      printf (fmt, ##__VA_ARGS__);                                            \
-      return;                                                                 \
-    }                                                                         \
-  while (0)
-
-#define printf_goto(label, fmt, ...)                                          \
-  do                                                                          \
-    {                                                                         \
-      printf (fmt, ##__VA_ARGS__);                                            \
-      goto label;                                                             \
-    }                                                                         \
-  while (0)
-
 static void
 work (struct inotify_event *event)
 {
@@ -139,8 +117,7 @@ work (struct inotify_event *event)
   char *data = mstr_data (mstr);
   size_t len = mstr_len (mstr);
   size_t size = strlen (name);
-  char path[NAME_SIZE];
-  char time[TIME_SIZE];
+  char buff[NAME_SIZE];
   size_t space = 0;
   size_t tsize;
   FILE *fs;
@@ -149,16 +126,16 @@ work (struct inotify_event *event)
   if (strcmp (name + size - 3, ".md") != 0)
     printf_return ("    not a markdown file: %s\n", event->name);
 
-  path[len] = '/';
-  memcpy (path, data, len);
-  memcpy (path + len + 1, name, size + 1);
+  buff[len] = '/';
+  memcpy (buff, data, len);
+  memcpy (buff + len + 1, name, size + 1);
 
   /* delay */
   struct timespec ts = { .tv_nsec = WRITE_DELAY };
   nanosleep (&ts, NULL);
 
   /* open */
-  if (!(fs = fopen (path, "r+")))
+  if (!(fs = fopen (buff, "r+")))
     printf_return ("    open failed!\n");
 
   ssize_t llen;        /* line length */
@@ -180,11 +157,11 @@ work (struct inotify_event *event)
         break;
     }
 
-  if ((tsize = get_time (time, sizeof (time))) == 0)
+  if ((tsize = get_time (buff, sizeof (buff))) == 0)
     printf_goto (clean_fs, "    get time failed!\n");
   if (fseek (fs, 9L - llen, SEEK_CUR) != 0)
     printf_goto (clean_fs, "    fseek failed!\n");
-  printf ("    new time: %s\n", time);
+  printf ("    new time: %s\n", buff);
 
   for (int i = 9, ch; i < llen; i++, space++)
     if (!(ch = line[i]) || ch == '\n' || space >= tsize)
@@ -194,7 +171,7 @@ work (struct inotify_event *event)
     printf_goto (clean_fs, "    there's not enough sapce to overwrite\n");
 
   /* overwrite */
-  if (fwrite (time, sizeof (char), tsize, fs) != tsize)
+  if (fwrite (buff, 1, tsize, fs) != tsize)
     printf_goto (clean_fs, "    fwrite failed!\n");
 
   printf ("    updated successfully!\n");
