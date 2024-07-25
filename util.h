@@ -2,6 +2,7 @@
 #define UTIL_H
 
 #include <stdio.h>
+#include <stdlib.h>
 
 #define error(fmt, ...)                                                       \
   do                                                                          \
@@ -9,7 +10,7 @@
       fprintf (stderr, "%s:%d (%s): ", __FUNCTION__, __LINE__, __FILE__);     \
       fprintf (stderr, fmt, ##__VA_ARGS__);                                   \
       fprintf (stderr, "\n");                                                 \
-      __builtin_trap ();                                                      \
+      exit (1);                                                               \
     }                                                                         \
   while (0)
 
@@ -17,6 +18,22 @@
   do                                                                          \
     if (expr)                                                                 \
       error (fmt, ##__VA_ARGS__);                                             \
+  while (0)
+
+#define printf_return(fmt, ...)                                               \
+  do                                                                          \
+    {                                                                         \
+      printf (fmt, ##__VA_ARGS__);                                            \
+      return;                                                                 \
+    }                                                                         \
+  while (0)
+
+#define printf_goto(label, fmt, ...)                                          \
+  do                                                                          \
+    {                                                                         \
+      printf (fmt, ##__VA_ARGS__);                                            \
+      goto label;                                                             \
+    }                                                                         \
   while (0)
 
 #endif
