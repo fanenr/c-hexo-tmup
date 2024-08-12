@@ -14,14 +14,14 @@
 static int inotify;
 static mstr_t entries[WATCH_SIZE];
 
-static void add_watch (const char *dpath);
+static void add_watch (const char *path);
 static void work (struct inotify_event *event);
-static size_t get_time (char *dest, size_t size);
+static size_t get_time (char *buff, size_t size);
 
 int
 main (int argc, char **argv)
 {
-  setlocale (LC_ALL, "en_US.UTF-8");
+  setlocale (LC_ALL, "");
   error_if (argc < 2, "Usage: %s <hexo-posts-dir>\n", argv[0]);
 
   char *dir = argv[1];
@@ -53,13 +53,13 @@ main (int argc, char **argv)
     }
 }
 
-static void
-add_watch (const char *dpath)
+static inline void
+add_watch (const char *path)
 {
   char sub[NAME_SIZE];
-  DIR *dir = opendir (dpath);
+  DIR *dir = opendir (path);
   error_if (!dir, "opendir");
-  size_t len = strlen (dpath);
+  size_t len = strlen (path);
 
   for (struct dirent *item; (item = readdir (dir));)
     {
@@ -71,12 +71,12 @@ add_watch (const char *dpath)
 
       if (size == 1 && name[0] == '.')
         {
-          int wfd = inotify_add_watch (inotify, dpath, WATCH_FLAG);
+          int wfd = inotify_add_watch (inotify, path, WATCH_FLAG);
           error_if (wfd < 0, "inotify_add_watch");
-          printf ("watching: %s\n", dpath);
+          printf ("watching: %s\n", path);
 
           mstr_t *mstr = entries + wfd;
-          if (!mstr_assign_byte (mstr, dpath, len))
+          if (!mstr_assign_byte (mstr, path, len))
             error ("mstr_assign_byte");
 
           continue;
@@ -86,7 +86,7 @@ add_watch (const char *dpath)
         continue;
 
       sub[len] = '/';
-      memcpy (sub, dpath, len);
+      memcpy (sub, path, len);
       memcpy (sub + len + 1, name, size + 1);
 
       add_watch (sub);
@@ -95,7 +95,7 @@ add_watch (const char *dpath)
   closedir (dir);
 }
 
-static size_t
+static inline size_t
 get_time (char *dest, size_t size)
 {
   time_t raw = time (NULL);
@@ -104,7 +104,7 @@ get_time (char *dest, size_t size)
   return strftime (dest, size, "%Y-%m-%d %H:%M:%S", tm);
 }
 
-static void
+static inline void
 work (struct inotify_event *event)
 {
   char *name = event->name;
@@ -139,7 +139,7 @@ work (struct inotify_event *event)
     printf_return ("    open failed!\n");
 
   ssize_t llen;        /* line length */
-  static char *line;   /* getline buffer data*/
+  static char *line;   /* getline buffer data */
   static size_t lsize; /* getline buffer size */
 
   for (int front = 0;;)
