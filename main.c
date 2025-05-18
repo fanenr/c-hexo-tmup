@@ -42,14 +42,14 @@ main (int argc, char **argv)
       error_if (n <= 0, "read from inotify");
 
       for (char *ptr = buff; ptr < buff + n;
-           ptr += sizeof (struct inotify_event) + event->len)
-        {
-          event = (struct inotify_event *)ptr;
-          char *path = mstr_data (entries + event->wd);
-          inotify_add_watch (inotify, path, IN_ONLYDIR);
-          work (event);
-          inotify_add_watch (inotify, path, WATCH_FLAG);
-        }
+	   ptr += sizeof (struct inotify_event) + event->len)
+	{
+	  event = (struct inotify_event *) ptr;
+	  char *path = mstr_data (entries + event->wd);
+	  inotify_add_watch (inotify, path, IN_ONLYDIR);
+	  work (event);
+	  inotify_add_watch (inotify, path, WATCH_FLAG);
+	}
     }
 }
 
@@ -64,26 +64,26 @@ add_watch (const char *path)
   for (struct dirent *item; (item = readdir (dir));)
     {
       if (item->d_type != DT_DIR)
-        continue;
+	continue;
 
       char *name = item->d_name;
       size_t size = strlen (name);
 
       if (size == 1 && name[0] == '.')
-        {
-          int wfd = inotify_add_watch (inotify, path, WATCH_FLAG);
-          error_if (wfd < 0, "inotify_add_watch");
-          printf ("watching: %s\n", path);
+	{
+	  int wfd = inotify_add_watch (inotify, path, WATCH_FLAG);
+	  error_if (wfd < 0, "inotify_add_watch");
+	  printf ("watching: %s\n", path);
 
-          mstr_t *mstr = entries + wfd;
-          if (!mstr_assign_byte (mstr, path, len))
-            error ("mstr_assign_byte");
+	  mstr_t *mstr = entries + wfd;
+	  if (!mstr_assign_byte (mstr, path, len))
+	    error ("mstr_assign_byte");
 
-          continue;
-        }
+	  continue;
+	}
 
       if (size == 2 && name[0] == '.' && name[1] == '.')
-        continue;
+	continue;
 
       sub[len] = '/';
       memcpy (sub, path, len);
@@ -138,23 +138,23 @@ work (struct inotify_event *event)
   if (!(fs = fopen (buff, "r+")))
     printf_return ("    open failed!\n");
 
-  ssize_t llen;        /* line length */
+  ssize_t llen;	       /* line length */
   static char *line;   /* getline buffer data */
   static size_t lsize; /* getline buffer size */
 
   for (int front = 0;;)
     {
       if ((llen = getline (&line, &lsize, fs)) == -1)
-        printf_goto (clean_fs, "    getline failed!\n");
+	printf_goto (clean_fs, "    getline failed!\n");
 
       if (strncmp (line, "---", 3) == 0)
-        front++;
+	front++;
 
       if (front > 1)
-        printf_goto (clean_fs, "    didn't find updated field\n");
+	printf_goto (clean_fs, "    didn't find updated field\n");
 
       if (!strncmp (line, "updated: ", 9))
-        break;
+	break;
     }
 
   if ((tsize = get_time (buff, sizeof (buff))) == 0)
